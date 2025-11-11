@@ -2,6 +2,8 @@ const express = require('express');
 const { Client, GatewayIntentBits } = require('discord.js');
 const cors = require('cors');
 const { fetchSensCritiqueProfile } = require('./senscritique-scraper');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -27,7 +29,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildPresences,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates
   ]
 });
 
@@ -46,6 +49,19 @@ client.once('ready', async () => {
     try {
       const member = await guild.members.fetch(TARGET_USER_ID).catch(() => null);
       if (member) {
+        try {
+          const fullUser = await client.users.fetch(TARGET_USER_ID, { force: true });
+          console.log('🔍 Utilisateur complet récupéré:', {
+            flags: fullUser.flags?.toArray(),
+            publicFlags: fullUser.publicFlags?.toArray(),
+            premiumType: fullUser.premiumType,
+            accentColor: fullUser.accentColor,
+            banner: fullUser.banner
+          });
+          member.user = fullUser;
+        } catch (err) {
+          console.log('⚠️ Impossible de récupérer le profil complet:', err.message);
+        }
         updatePresenceCache(member);
         console.log(`✅ Utilisateur trouvé dans: ${guild.name}`);
         console.log(`👤 Username: ${member.user.username}`);
@@ -65,16 +81,64 @@ client.on('presenceUpdate', (oldPresence, newPresence) => {
   }
 });
 
+client.on('voiceStateUpdate', (oldState, newState) => {
+  if (newState.id === TARGET_USER_ID) {
+    console.log('🎤 Changement d\'état vocal détecté');
+    updatePresenceCache(newState.member);
+  }
+});
+
 function updatePresenceCache(member) {
   if (!member) return;
 
+  let userFlags = member.user.flags?.toArray() || [];
+  const userPublicFlags = member.user.publicFlags?.toArray() || [];
+  
+  try {
+    const badgesPath = path.join(__dirname, 'user-badges.json');
+    if (fs.existsSync(badgesPath)) {
+      const badgesData = JSON.parse(fs.readFileSync(badgesPath, 'utf8'));
+      if (badgesData.badges && Array.isArray(badgesData.badges)) {
+        userFlags = [...new Set([...userFlags, ...badgesData.badges])];
+        console.log('✅ Badges personnalisés chargés depuis user-badges.json');
+      }
+    }
+  } catch (err) {
+    console.log('⚠️ Erreur lors du chargement des badges personnalisés:', err.message);
+  }
+  
+  console.log('🎖️ FLAGS DÉTECTÉS:');
+  console.log('   - flags:', userFlags);
+  console.log('   - publicFlags:', userPublicFlags);
+  console.log('   - premiumType:', member.user.premiumType);
+  console.log('   - accentColor:', member.user.accentColor);
+  console.log('   - banner:', member.user.banner);
+
+  const voiceChannel = member.voice?.channel;
+  const isStreaming = member.voice?.streaming || false;
+  const isVideo = member.voice?.selfVideo || false;
+  
+  if (voiceChannel) {
+    let voiceInfo = `🎤 Utilisateur en vocal: ${voiceChannel.name} dans ${voiceChannel.guild.name}`;
+    if (isStreaming) voiceInfo += ' 🔴 (streaming)';
+    if (isVideo) voiceInfo += ' 📹 (caméra)';
+    console.log(voiceInfo);
+  } else {
+    console.log('🔇 Utilisateur pas en vocal');
+  }
+  
   cachedPresence = {
     user: {
       id: member.user.id,
       username: member.user.username,
       discriminator: member.user.discriminator,
       avatar: member.user.avatar,
-      displayName: member.displayName
+      displayName: member.displayName,
+      flags: userFlags,
+      publicFlags: userPublicFlags,
+      premiumType: member.user.premiumType || 0,
+      accentColor: member.user.accentColor || null,
+      banner: member.user.banner || null
     },
     status: member.presence?.status || 'offline',
     activities: member.presence?.activities?.map(activity => ({
@@ -90,7 +154,18 @@ function updatePresenceCache(member) {
         smallImage: activity.assets.smallImage,
         smallText: activity.assets.smallText
       } : null
-    })) || []
+    })) || [],
+    voiceState: voiceChannel ? {
+      channelName: voiceChannel.name,
+      channelId: voiceChannel.id,
+      serverName: voiceChannel.guild.name,
+      selfMute: member.voice.selfMute || false,
+      selfDeaf: member.voice.selfDeaf || false,
+      serverMute: member.voice.serverMute || false,
+      serverDeaf: member.voice.serverDeaf || false,
+      streaming: isStreaming,
+      video: isVideo
+    } : null
   };
 }
 

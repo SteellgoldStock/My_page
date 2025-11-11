@@ -356,6 +356,36 @@
       color: var(--text-dim);
     }
     
+    .discord-badges {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      min-height: 24px;
+    }
+    
+    .discord-badge {
+      width: 24px;
+      height: 24px;
+      display: inline-block;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+      flex-shrink: 0;
+    }
+    
+    .discord-badge:hover {
+      transform: scale(1.3);
+      filter: drop-shadow(0 4px 8px rgba(79, 70, 229, 0.6));
+    }
+    
+    .discord-badge[title] {
+      cursor: help;
+    }
+    
     /* About section compact */
     .about-content {
       color: var(--text-dim);
@@ -1040,6 +1070,8 @@
               <span id="discord-status-text">Hors ligne</span>
             </div>
             <div id="discord-activity" class="embed-activity text-dim">Vérification du statut...</div>
+            <div id="discord-streaming" class="embed-activity" style="margin-top: 2px; display: none;"></div>
+            <div id="discord-badges" class="discord-badges"></div>
           </div>
         </div>
       </header>
@@ -1188,6 +1220,86 @@
     // Configuration du backend Discord
     const BACKEND_URL = "http://localhost:3000";
     
+    // Mapping des badges Discord
+    function getDiscordBadgeInfo(flag) {
+      const badges = {
+        'Staff': {
+          name: 'Personnel Discord',
+          icon: 'https://cdn.discordapp.com/badge-icons/5e74e9b61934fc1f67c65515d1f7e60d.png'
+        },
+        'Partner': {
+          name: 'Propriétaire de serveur partenaire',
+          icon: 'https://cdn.discordapp.com/badge-icons/3f9748e53446a137a052f3454e2de41e.png'
+        },
+        'Hypesquad': {
+          name: 'Événements HypeSquad',
+          icon: 'https://cdn.discordapp.com/badge-icons/bf01d1073931f921909045f3a39fd264.png'
+        },
+        'BugHunterLevel1': {
+          name: 'Chasseur de bugs niveau 1',
+          icon: 'https://cdn.discordapp.com/badge-icons/2717692c7dca7289b35297368a940dd0.png'
+        },
+        'HypeSquadOnlineHouse1': {
+          name: 'HypeSquad Bravery',
+          icon: 'https://cdn.discordapp.com/badge-icons/8a88d63823d8a71cd5e390baa45efa02.png'
+        },
+        'HypeSquadOnlineHouse2': {
+          name: 'HypeSquad Brilliance',
+          icon: 'https://cdn.discordapp.com/badge-icons/011940fd013da3f7fb926e4a1cd2e618.png'
+        },
+        'HypeSquadOnlineHouse3': {
+          name: 'HypeSquad Balance',
+          icon: 'https://cdn.discordapp.com/badge-icons/3aa41de486fa12454c3761e8e223442e.png'
+        },
+        'PremiumEarlySupporter': {
+          name: 'Soutien précoce',
+          icon: 'https://cdn.discordapp.com/badge-icons/7060786766c9c840eb3019e725d2b358.png'
+        },
+        'BugHunterLevel2': {
+          name: 'Chasseur de bugs niveau 2',
+          icon: 'https://cdn.discordapp.com/badge-icons/848f79194d4be5ff5f81505cbd0ce1e6.png'
+        },
+        'VerifiedDeveloper': {
+          name: 'Développeur de bot vérifié',
+          icon: 'https://cdn.discordapp.com/badge-icons/6bdc42827a38498929a4920da12695d9.png'
+        },
+        'CertifiedModerator': {
+          name: 'Ancien du programme de modération',
+          icon: 'https://cdn.discordapp.com/badge-icons/fee1624003e2fee35cb398e125dc479b.png'
+        },
+        'ActiveDeveloper': {
+          name: 'Développeur actif',
+          icon: 'https://cdn.discordapp.com/badge-icons/6bdc42827a38498929a4920da12695d9.png'
+        },
+        'PremiumSubscriber': {
+          name: 'Abonné Discord Nitro',
+          icon: 'https://cdn.discordapp.com/badge-icons/2ba85e8026a8614b640c2837bcdfe21b.png'
+        },
+        'Nitro': {
+          name: 'Abonné Discord Nitro',
+          icon: 'https://cdn.discordapp.com/badge-icons/2ba85e8026a8614b640c2837bcdfe21b.png'
+        },
+        'QuestCompleted': {
+          name: 'Quête Discord terminée',
+          icon: 'https://cdn.discordapp.com/badge-icons/7d9ae358c8c5e118768335dbe68b4fb8.png'
+        },
+        'GuildProductPurchaser': {
+          name: 'Apprenti Orbs',
+          icon: 'https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png'
+        },
+        'SupportsCommands': {
+          name: 'Apprenti Orbs',
+          icon: 'https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png'
+        },
+        'ApplicationAutoModerationRuleCreateBadge': {
+          name: 'Apprenti Orbs',
+          icon: 'https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png'
+        }
+      };
+      
+      return badges[flag] || null;
+    }
+    
     // Fonction pour mettre à jour le statut Discord
     function updateDiscordPresence() {
       // Essayer de se connecter au backend
@@ -1232,7 +1344,26 @@
           
           // Mettre à jour l'activité
           const activityEl = document.getElementById("discord-activity");
-          if (data.activities && data.activities.length > 0) {
+          
+          const streamingEl = document.getElementById("discord-streaming");
+          
+          if (data.voiceState) {
+            let voiceText = `🎤 En vocal dans ${data.voiceState.channelName}`;
+            if (data.voiceState.video) voiceText += ' 📹';
+            if (data.voiceState.selfMute) voiceText += ' 🔇';
+            if (data.voiceState.selfDeaf) voiceText += ' 🎧';
+            activityEl.textContent = voiceText;
+            activityEl.style.color = '#5865F2';
+            
+            if (data.voiceState.streaming) {
+              streamingEl.textContent = '🔴 En partage d\'écran';
+              streamingEl.style.display = 'block';
+              streamingEl.style.color = '#ed4245';
+              streamingEl.style.fontWeight = '600';
+            } else {
+              streamingEl.style.display = 'none';
+            }
+          } else if (data.activities && data.activities.length > 0) {
             const activity = data.activities[0];
             let activityText = activity.name;
             
@@ -1244,9 +1375,76 @@
             }
             
             activityEl.textContent = activityText;
+            activityEl.style.color = 'var(--text-dim)';
+            streamingEl.style.display = 'none';
           } else {
             activityEl.textContent = "Aucune activité";
+            activityEl.style.color = 'var(--text-dim)';
+            streamingEl.style.display = 'none';
           }
+          
+          // Afficher les badges
+          const badgesEl = document.getElementById("discord-badges");
+          badgesEl.innerHTML = '';
+          
+          console.log('🎖️ Données utilisateur Discord:', user);
+          console.log('🎖️ Flags:', user.flags);
+          console.log('🎖️ Public Flags:', user.publicFlags);
+          console.log('🎖️ Premium Type:', user.premiumType);
+          
+          const badges = (user.flags && user.flags.length > 0) ? user.flags : (user.publicFlags || []);
+          console.log('🎖️ Badges à afficher:', badges);
+          
+          let badgeCount = 0;
+          
+          if (badges.length > 0) {
+            badges.forEach(flag => {
+              console.log('🎖️ Traitement du flag:', flag);
+              const badgeInfo = getDiscordBadgeInfo(flag);
+              if (badgeInfo) {
+                console.log('✅ Badge trouvé:', badgeInfo.name, 'URL:', badgeInfo.icon);
+                const badgeEl = document.createElement('div');
+                badgeEl.className = 'discord-badge';
+                badgeEl.style.backgroundImage = `url('${badgeInfo.icon}')`;
+                badgeEl.title = badgeInfo.name;
+                
+                const testImg = new Image();
+                testImg.onerror = () => {
+                  console.error('❌ Erreur de chargement de l\'icône:', badgeInfo.name, badgeInfo.icon);
+                };
+                testImg.src = badgeInfo.icon;
+                
+                badgesEl.appendChild(badgeEl);
+                badgeCount++;
+              } else {
+                console.log('❌ Badge non trouvé pour:', flag);
+                const unknownBadgeEl = document.createElement('div');
+                unknownBadgeEl.className = 'discord-badge';
+                unknownBadgeEl.style.backgroundImage = `url('https://cdn.discordapp.com/badge-icons/ca2e7b4bf27e4bfbb2a25a1d47d4c9f6.png')`;
+                unknownBadgeEl.title = `Badge inconnu: ${flag}`;
+                unknownBadgeEl.style.opacity = '0.7';
+                badgesEl.appendChild(unknownBadgeEl);
+                badgeCount++;
+              }
+            });
+          } else {
+            console.log('⚠️ Aucun badge trouvé dans les flags');
+          }
+          
+          if (user.premiumType && user.premiumType > 0) {
+            console.log('💎 Utilisateur Nitro détecté, type:', user.premiumType);
+            const nitroInfo = getDiscordBadgeInfo('Nitro');
+            if (nitroInfo) {
+              const badgeEl = document.createElement('div');
+              badgeEl.className = 'discord-badge';
+              badgeEl.style.backgroundImage = `url('${nitroInfo.icon}')`;
+              badgeEl.title = nitroInfo.name;
+              badgesEl.appendChild(badgeEl);
+              badgeCount++;
+            }
+          }
+          
+          console.log(`📊 Total de badges affichés: ${badgeCount}`);
         })
         .catch(err => {
           console.error("Erreur lors de la récupération du statut Discord:", err);
@@ -1337,69 +1535,53 @@
     }
     
     // Générer le tableau d'activité GitHub
-    function generateActivityTable(events, repos = []) {
+    async function generateActivityTable(events, repos = []) {
       const tbody = document.getElementById('github-activity-tbody');
       tbody.innerHTML = '';
       
-      const repoEvents = {};
-      events.forEach(event => {
-        if (event.type === 'PushEvent' && event.repo) {
-          const repoName = event.repo.name;
-          if (!repoEvents[repoName]) {
-            repoEvents[repoName] = [];
-          }
-          repoEvents[repoName].push(event);
-        }
-      });
-      
-      const sortedRepos = Object.keys(repoEvents).sort((a, b) => {
-        const aLatest = new Date(repoEvents[a][0].created_at);
-        const bLatest = new Date(repoEvents[b][0].created_at);
-        return bLatest - aLatest;
-      });
-      
-      if (sortedRepos.length > 0) {
-        sortedRepos.slice(0, 5).forEach(repoName => {
-          const latestEvent = repoEvents[repoName][0];
-          const commitMessage = latestEvent.payload?.commits?.[0]?.message || 'Pas de message';
-          const commitTime = new Date(latestEvent.created_at);
-          const timeAgo = getTimeAgo(commitTime);
-          
+      if (repos.length > 0) {
+        const reposToShow = repos.slice(0, 5);
+        
+        for (const repo of reposToShow) {
           const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>
-              <a href="https://github.com/${repoName}" target="_blank" class="repo-name">
-                ${repoName.split('/')[1]}
-              </a>
-            </td>
-            <td class="commit-message" title="${commitMessage}">
-              ${commitMessage.length > 30 ? commitMessage.substring(0, 30) + '...' : commitMessage}
-            </td>
-            <td class="commit-time">${timeAgo}</td>
-          `;
-          
-          tbody.appendChild(row);
-        });
-      } else if (repos.length > 0) {
-        repos.slice(0, 5).forEach(repo => {
-          const updatedTime = new Date(repo.updated_at);
+          const repoName = repo.name;
+          const updatedTime = new Date(repo.updated_at || repo.pushed_at);
           const timeAgo = getTimeAgo(updatedTime);
           
-          const row = document.createElement('tr');
           row.innerHTML = `
             <td>
               <a href="${repo.html_url}" target="_blank" class="repo-name">
-                ${repo.name}
+                ${repoName}
               </a>
             </td>
             <td class="commit-message">
-              ${repo.description || 'Pas de description'}
+              <span style="color: var(--text-dim);">Chargement...</span>
             </td>
             <td class="commit-time">${timeAgo}</td>
           `;
           
           tbody.appendChild(row);
-        });
+          
+          try {
+            const commitsResponse = await fetch(`https://api.github.com/repos/${repo.full_name}/commits?per_page=1`);
+            if (commitsResponse.ok) {
+              const commits = await commitsResponse.json();
+              if (commits.length > 0) {
+                const commitMessage = commits[0].commit.message;
+                const commitMessageCell = row.querySelector('.commit-message');
+                commitMessageCell.innerHTML = commitMessage.length > 30 
+                  ? commitMessage.substring(0, 30) + '...' 
+                  : commitMessage;
+                commitMessageCell.title = commitMessage;
+                console.log('✅ Commit récupéré pour', repoName, ':', commitMessage);
+              }
+            }
+          } catch (error) {
+            console.error('❌ Erreur lors de la récupération du commit pour', repoName, ':', error);
+            const commitMessageCell = row.querySelector('.commit-message');
+            commitMessageCell.textContent = repo.description || 'Pas de description';
+          }
+        }
       } else {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-dim);">Aucune activité récente</td></tr>';
       }
