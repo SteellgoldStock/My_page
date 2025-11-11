@@ -920,7 +920,7 @@
     .sc-favorites-wrapper {
       position: relative;
       overflow: hidden;
-      padding: 0 40px;
+      padding: 0;
       width: 100%;
     }
     
@@ -2019,8 +2019,8 @@
       const reviewsContainer = elements.sc.reviewsContainer;
       reviewsContainer.innerHTML = '';
       
-      if (data.reviews && data.reviews.length > 0) {
-        const reviewsToShow = data.reviews.slice(0, 10);
+      if (data.reviews && data.reviews.length > 0 && data.reviews[0].content) {
+        const reviewsToShow = data.reviews.slice(0, 50);
         reviewsToShow.forEach(review => {
           const reviewItem = document.createElement('a');
           reviewItem.className = 'sc-review-item';
@@ -2031,9 +2031,11 @@
           const dateToFormat = review.date || review.created_at || review.updated_at;
           const formattedDate = dateToFormat ? formatReviewDate(dateToFormat) : '';
           
+          const ratingStars = review.rating ? ` | ${review.rating}⭐` : '';
+          
           reviewItem.innerHTML = `
             <div class="sc-review-header">
-              <div class="sc-review-title">${review.title || 'Sans titre'}</div>
+              <div class="sc-review-title">${review.title || 'Sans titre'}${ratingStars}</div>
             </div>
             <div class="sc-review-comment">${review.content || review.comment || 'Pas de commentaire'}</div>
             ${formattedDate ? `<div class="sc-review-date">${formattedDate}</div>` : ''}
@@ -2041,41 +2043,10 @@
           
           reviewsContainer.appendChild(reviewItem);
         });
-      } else if (data.collections && data.collections.length > 0) {
-        data.collections.slice(0, 10).forEach(item => {
-          const reviewItem = document.createElement('a');
-          reviewItem.className = 'sc-review-item';
-          reviewItem.href = item.url || `${SC_PROFILE_URL}/collection`;
-          reviewItem.target = '_blank';
-          reviewItem.rel = 'noopener noreferrer';
-          
-          const dateToFormat = item.date || item.added_at || item.created_at;
-          const formattedDate = dateToFormat ? formatReviewDate(dateToFormat) : '';
-          
-          reviewItem.innerHTML = `
-            <div class="sc-review-header">
-              <div class="sc-review-title">${item.title || 'Titre inconnu'}</div>
-            </div>
-            <div class="sc-review-comment">Dans la collection</div>
-            ${formattedDate ? `<div class="sc-review-date">${formattedDate}</div>` : ''}
-          `;
-          
-          reviewsContainer.appendChild(reviewItem);
-        });
       } else {
-        reviewsContainer.innerHTML = `
-          <div class="sc-review-item">
-            <div class="sc-review-header">
-              <div class="sc-review-title">Profil Sens Critique</div>
-            </div>
-            <div class="sc-review-comment">
-              Consultez le profil complet sur 
-              <a href="${SC_PROFILE_URL}" target="_blank" style="color: var(--sc-primary);">
-                senscritique.com/${SC_USERNAME}
-              </a>
-            </div>
-          </div>
-        `;
+        console.log('⚠️ Pas de critiques valides, utilisation du fallback');
+        useFallbackData({ username: SC_USERNAME, stats: data.stats });
+        return;
       }
       
       // Charger les films favoris
@@ -2161,10 +2132,6 @@
         grid.appendChild(movieItem);
       });
       
-      const spacer = document.createElement('div');
-      spacer.style.minWidth = '40px';
-      spacer.style.flexShrink = '0';
-      grid.appendChild(spacer);
       
       setupFavoritesSlider();
     }
@@ -2236,21 +2203,24 @@
       const fallbackReviews = [
         {
           title: 'The Rain',
-          content: 'Honnêtement, j\'ai vraiment accroché à cette série. Le concept du virus transmis par la pluie est super original...',
+          content: 'Honn\u00eatement, j\'ai vraiment accroch\u00e9 \u00e0 cette s\u00e9rie. Le concept du virus transmis par la pluie est super original...',
           date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          url: `${SC_PROFILE_URL}/critiques`
+          url: `${SC_PROFILE_URL}/critiques`,
+          rating: 9
         },
         {
-          title: 'Nouvelle École',
-          content: 'Franchement, c\'est juste nul. Tout sonne faux, surjoué, trop de drama pour pas grand-chose...',
+          title: 'Nouvelle \u00c9cole',
+          content: 'Franchement, c\'est juste nul. Tout sonne faux, surjou\u00e9, trop de drama pour pas grand-chose...',
           date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-          url: `${SC_PROFILE_URL}/critiques`
+          url: `${SC_PROFILE_URL}/critiques`,
+          rating: 3
         },
         {
-          title: 'Astérix & Obélix : Le Combat des chefs',
-          content: 'Franchement, j\'ai passé un bon moment devant ce petit cartoon, sans que ce soit une claque non plus...',
+          title: 'Ast\u00e9rix & Ob\u00e9lix : Le Combat des chefs',
+          content: 'Franchement, j\'ai pass\u00e9 un bon moment devant ce petit cartoon, sans que ce soit une claque non plus...',
           date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-          url: `${SC_PROFILE_URL}/critiques`
+          url: `${SC_PROFILE_URL}/critiques`,
+          rating: 7
         }
       ];
       
@@ -2263,10 +2233,11 @@
         reviewItem.rel = 'noopener noreferrer';
         
         const formattedDate = formatReviewDate(review.date);
+        const ratingStars = review.rating ? ` | ${review.rating}\u2b50` : '';
         
         reviewItem.innerHTML = `
           <div class="sc-review-header">
-            <div class="sc-review-title">${review.title}</div>
+            <div class="sc-review-title">${review.title}${ratingStars}</div>
           </div>
           <div class="sc-review-comment">${review.content}</div>
           ${formattedDate ? `<div class="sc-review-date">${formattedDate}</div>` : ''}

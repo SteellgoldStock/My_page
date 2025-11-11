@@ -1,6 +1,83 @@
 const https = require('https');
 const { JSDOM } = require('jsdom');
 
+async function fetchSensCritiqueReviews(username) {
+  return new Promise((resolve, reject) => {
+    const url = `https://www.senscritique.com/${username}/critiques`;
+    
+    const options = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
+    };
+    
+    https.get(url, options, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const dom = new JSDOM(data);
+          const document = dom.window.document;
+          const reviews = [];
+          
+          const reviewElements = document.querySelectorAll('.elco-collection-item, .ProductListItem, [class*="review"], [class*="critique"]');
+          
+          reviewElements.forEach((element) => {
+            const titleEl = element.querySelector('h3, h4, .title, [class*="title"]');
+            const contentEl = element.querySelector('p, .content, [class*="content"], [class*="text"]');
+            const dateEl = element.querySelector('time, .date, [class*="date"]');
+            const linkEl = element.querySelector('a[href*="/film/"], a[href*="/serie/"], a[href*="jeu"]');
+            const ratingEl = element.querySelector('[class*="rating"], [class*="note"], [aria-label*="note"]');
+            
+            if (titleEl) {
+              const title = titleEl.textContent.trim();
+              const content = contentEl ? contentEl.textContent.trim() : '';
+              const date = dateEl ? dateEl.textContent.trim() : '';
+              const url = linkEl ? `https://www.senscritique.com${linkEl.getAttribute('href')}` : '';
+              
+              let rating = null;
+              if (ratingEl) {
+                const ratingText = ratingEl.textContent || ratingEl.getAttribute('aria-label') || '';
+                const ratingMatch = ratingText.match(/(\d+)/);
+                if (ratingMatch) {
+                  rating = parseInt(ratingMatch[1]);
+                }
+              }
+              
+              if (title && content.length > 20) {
+                reviews.push({
+                  title,
+                  content: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+                  date: date || 'Récemment',
+                  url,
+                  rating
+                });
+              }
+            }
+          });
+          
+          console.log(`✅ ${reviews.length} critiques trouvées`);
+          resolve(reviews);
+          
+        } catch (error) {
+          console.error('❌ Erreur parsing critiques:', error.message);
+          resolve([]);
+        }
+      });
+      
+    }).on('error', (error) => {
+      console.error('❌ Erreur requête critiques:', error.message);
+      resolve([]);
+    });
+  });
+}
+
 async function fetchSensCritiqueFavorites(username) {
   return new Promise((resolve, reject) => {
     const url = `https://www.senscritique.com/${username}/collection?action=RECOMMEND`;
@@ -144,28 +221,14 @@ async function fetchSensCritiqueProfile(username) {
             }
           }
           
-          const reviews = [];
-          const reviewRegex = /Critique de ([^<]+) par KiMi_[\s\S]*?<\/h3>([\s\S]*?)(?=<h3|$)/gi;
-          let reviewMatch;
-          let reviewCount = 0;
+          let reviews = [];
           
-          while ((reviewMatch = reviewRegex.exec(data)) !== null && reviewCount < 5) {
-            const title = reviewMatch[1].trim();
-            const contentMatch = reviewMatch[2].match(/>([^<]+)</g);
-            let content = '';
-            
-            if (contentMatch && contentMatch.length > 0) {
-              content = contentMatch[0].replace(/>/g, '').replace(/</g, '').trim();
-            }
-            
-            if (title && content && content.length > 20) {
-              reviews.push({
-                title: title,
-                content: content.substring(0, 150) + (content.length > 150 ? '...' : ''),
-                date: 'il y a quelques jours'
-              });
-              reviewCount++;
-            }
+          try {
+            reviews = await fetchSensCritiqueReviews(username);
+            console.log(`✅ ${reviews.length} critiques récupérées depuis /critiques`);
+          } catch (reviewError) {
+            console.log('⚠️  Erreur récupération critiques, utilisation du fallback');
+            reviews = [];
           }
           
           if (stats.total === 0 && (stats.films === 0 && stats.series === 0)) {
@@ -209,4 +272,4 @@ async function fetchSensCritiqueProfile(username) {
   });
 }
 
-module.exports = { fetchSensCritiqueProfile, fetchSensCritiqueFavorites };
+module.exports = { fetchSensCritiqueProfile, fetchSensCritiqueFavorites, fetchSensCritiqueReviews };
