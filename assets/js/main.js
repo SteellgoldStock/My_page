@@ -503,7 +503,7 @@ function getTimeAgo(date) {
   const seconds = Math.floor((now - parsedDate) / 1000);
 
   if (seconds < 0) return null;
-  if (seconds < 60) return 'À l’instant';
+  if (seconds < 60) return 'À l\'instant';
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
@@ -513,16 +513,19 @@ function getTimeAgo(date) {
 
   const days = Math.floor(hours / 24);
   if (days === 1) return 'Hier';
-  if (days < 7) return `${days}j`;
+  if (days < 7) return `il y a ${days} jour${days > 1 ? 's' : ''}`;
 
   const weeks = Math.floor(days / 7);
-  if (weeks < 4) return `${weeks} sem`;
+  if (weeks < 4) return `il y a ${weeks} semaine${weeks > 1 ? 's' : ''}`;
 
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months} mois`;
-
-  const years = Math.floor(days / 365);
-  return `${years} an${years > 1 ? 's' : ''}`;
+  // Pour les dates de plus de quelques semaines, utiliser le format absolu "le X mois YYYY"
+  const monthNames = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 
+                      'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const day = parsedDate.getDate();
+  const month = monthNames[parsedDate.getMonth()];
+  const year = parsedDate.getFullYear();
+  return `le ${day} ${month} ${year}`;
 }
 
 async function fetchSensCritiqueData() {
@@ -581,26 +584,19 @@ function updateUIWithSCData(data) {
       reviewItem.target = '_blank';
       reviewItem.rel = 'noopener noreferrer';
 
-      // SOLUTION ALTERNATIVE: Toujours parser le texte brut de la date
-      // Priorité: date_raw (texte brut) > created_at (ISO) > date (texte)
+      // Priorité: date_raw (texte brut original) > date (texte) > created_at (ISO)
+      // On préfère utiliser le texte brut original pour garder le format Sens Critique
       let dateToFormat = null;
       
-      // Si on a un texte brut, le parser en date ISO
+      // Si on a un texte brut original, l'utiliser directement (il sera formaté par formatReviewDate)
       if (review.date_raw) {
-        const parsedFromRaw = parseDateFromText(review.date_raw);
-        if (parsedFromRaw) {
-          dateToFormat = parsedFromRaw;
-        } else {
-          // Si le parsing échoue, utiliser le texte brut directement
-          dateToFormat = review.date_raw;
-        }
-      } else if (review.created_at || review.updated_at) {
-        // Si on a déjà une date ISO, l'utiliser
-        dateToFormat = review.created_at || review.updated_at;
+        dateToFormat = review.date_raw;
       } else if (review.date) {
-        // Sinon, essayer de parser le champ date
-        const parsedFromDate = parseDateFromText(review.date);
-        dateToFormat = parsedFromDate || review.date;
+        // Sinon, utiliser le champ date
+        dateToFormat = review.date;
+      } else if (review.created_at || review.updated_at) {
+        // En dernier recours, utiliser la date ISO
+        dateToFormat = review.created_at || review.updated_at;
       }
       
       const formattedDate = dateToFormat ? formatReviewDate(dateToFormat) : '';
@@ -630,7 +626,24 @@ function formatReviewDate(dateString) {
     return '';
   }
   
-  // SOLUTION ALTERNATIVE: Toujours parser avec parseDateFromText d'abord
+  // Si c'est déjà un format Sens Critique valide (texte brut), l'utiliser directement
+  if (typeof dateString === 'string') {
+    const trimmed = dateString.trim();
+    // Vérifier si c'est un format "il y a X jours/semaines/mois/ans"
+    if (/^il y a\s+\d+\s+(jour|jours|semaine|semaines|mois|an|ans)$/i.test(trimmed)) {
+      return trimmed;
+    }
+    // Vérifier si c'est un format "le X mois YYYY" (avec ou sans point après le mois)
+    if (/^le\s+\d{1,2}\s+\w+\.?\s+\d{4}$/i.test(trimmed)) {
+      return trimmed;
+    }
+    // Vérifier si c'est "Aujourd'hui" ou "Hier"
+    if (/^(aujourd'hui|hier|auj\.)$/i.test(trimmed)) {
+      return trimmed;
+    }
+  }
+  
+  // Sinon, parser et formater avec getTimeAgo
   const parsedDate = parseDateFromText(dateString);
   
   if (parsedDate) {
@@ -955,4 +968,3 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchGitHubStats();
   fetchSensCritiqueData();
 });
-
