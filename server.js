@@ -8,9 +8,15 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const STATIC_MAX_AGE = process.env.STATIC_MAX_AGE || '1h';
+const CUSTOM_BADGES_PATH = path.join(__dirname, 'user-badges.json');
+const PRESENCE_REFRESH_INTERVAL = Number(process.env.PRESENCE_REFRESH_INTERVAL) || 2000;
 
+let customBadges = [];
+
+app.disable('x-powered-by');
 app.use(cors());
-app.use(express.static('.'));
+app.use(express.static('.', { maxAge: STATIC_MAX_AGE }));
 
 let cachedSensCritique = null;
 let lastSCFetch = 0;
@@ -41,6 +47,32 @@ let cachedPresence = {
 };
 
 let lastPresenceHash = null;
+
+function loadCustomBadges() {
+  try {
+    if (fs.existsSync(CUSTOM_BADGES_PATH)) {
+      const badgesData = JSON.parse(fs.readFileSync(CUSTOM_BADGES_PATH, 'utf8'));
+      if (badgesData.badges && Array.isArray(badgesData.badges)) {
+        customBadges = [...new Set(badgesData.badges)];
+        console.log('✅ Badges personnalisés chargés:', customBadges);
+      }
+    } else {
+      customBadges = [];
+    }
+  } catch (err) {
+    console.log('⚠️ Erreur lors du chargement des badges personnalisés:', err.message);
+    customBadges = [];
+  }
+}
+
+loadCustomBadges();
+
+if (fs.existsSync(CUSTOM_BADGES_PATH)) {
+  fs.watchFile(CUSTOM_BADGES_PATH, { persistent: false, interval: 60000 }, () => {
+    console.log('🔄 Rechargement des badges personnalisés');
+    loadCustomBadges();
+  });
+}
 
 function hashPresence(presence) {
   return JSON.stringify({
@@ -117,9 +149,10 @@ client.once('ready', async () => {
           }
         }
       } catch (err) {
+        console.log('⚠️ Impossible de rafraîchir la présence:', err.message);
       }
     }
-  }, 1000);
+  }, PRESENCE_REFRESH_INTERVAL);
 });
 
 client.on('presenceUpdate', (oldPresence, newPresence) => {
@@ -141,20 +174,11 @@ function updatePresenceCache(member, silent = false) {
 
   let userFlags = member.user.flags?.toArray() || [];
   const userPublicFlags = member.user.publicFlags?.toArray() || [];
-  
-  try {
-    const badgesPath = path.join(__dirname, 'user-badges.json');
-    if (fs.existsSync(badgesPath)) {
-      const badgesData = JSON.parse(fs.readFileSync(badgesPath, 'utf8'));
-      if (badgesData.badges && Array.isArray(badgesData.badges)) {
-        userFlags = [...new Set([...userFlags, ...badgesData.badges])];
-        if (!silent) console.log('✅ Badges personnalisés chargés depuis user-badges.json');
-      }
-    }
-  } catch (err) {
-    if (!silent) console.log('⚠️ Erreur lors du chargement des badges personnalisés:', err.message);
+
+  if (customBadges.length) {
+    userFlags = [...new Set([...userFlags, ...customBadges])];
   }
-  
+
   if (!silent) {
     console.log('🎖️ FLAGS DÉTECTÉS:');
     console.log('   - flags:', userFlags);
