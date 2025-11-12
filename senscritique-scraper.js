@@ -24,12 +24,67 @@ function parseReviewsFromHTML(html) {
       const context = html.substring(startIndex, Math.min(startIndex + 3000, html.length));
       
       // Extraire le contenu (texte entre le titre et "Lire la critique" ou "Par KiMi_")
-      const contentMatch = context.match(/([^<]{30,500}?)(?:Lire la critique|Par\s+KiMi_|<\/p>|<\/div>)/i);
-      const content = contentMatch ? contentMatch[1].trim() : null;
+      // On cherche le texte qui n'est pas dans des balises HTML
+      let content = null;
+      // Essayer plusieurs patterns pour le contenu
+      const contentPatterns = [
+        /([^<]{30,500}?)(?:Lire la critique|Par\s+KiMi_|<\/p>|<\/div>)/i,
+        /<p[^>]*>([^<]{30,500}?)<\/p>/i,
+        /<div[^>]*>([^<]{30,500}?)<\/div>/i
+      ];
+      
+      for (const pattern of contentPatterns) {
+        const match = context.match(pattern);
+        if (match && match[1] && match[1].trim().length > 20) {
+          content = match[1].trim();
+          break;
+        }
+      }
       
       // Chercher la date (après "Par KiMi_")
-      const dateMatch = context.match(/Par\s+KiMi_[\s\S]{0,100}?(il y a \d+ (?:jour|jours|semaine|semaines|mois|an|ans)|le \d{1,2}\s+\w+\.?\s+\d{4})/i);
-      const dateText = dateMatch ? dateMatch[1] : null;
+      // Essayer plusieurs patterns pour la date, dans l'ordre de priorité
+      let dateText = null;
+      
+      // Pattern 1: Chercher "Par KiMi_" suivi de la date
+      const parPattern = /Par\s+KiMi_[\s\S]{0,300}?(il y a \d+ (?:jour|jours|semaine|semaines|mois|an|ans)|le \d{1,2}\s+\w+\.?\s+\d{4})/i;
+      const parMatch = context.match(parPattern);
+      if (parMatch && parMatch[1]) {
+        dateText = parMatch[1].trim();
+        console.log(`📅 Date trouvée (après "Par KiMi_") pour "${title}": ${dateText}`);
+      }
+      
+      // Pattern 2: Chercher directement les dates dans le contexte
+      if (!dateText) {
+        const directPatterns = [
+          /(il y a \d+ (?:jour|jours|semaine|semaines|mois|an|ans))/i,
+          /(le \d{1,2}\s+\w+\.?\s+\d{4})/i
+        ];
+        
+        for (const pattern of directPatterns) {
+          const match = context.match(pattern);
+          if (match && match[1]) {
+            dateText = match[1].trim();
+            console.log(`📅 Date trouvée (directe) pour "${title}": ${dateText}`);
+            break;
+          }
+        }
+      }
+      
+      // Pattern 3: Chercher dans le HTML brut autour du titre
+      if (!dateText) {
+        const extendedContext = html.substring(Math.max(0, titleMatch.index - 1000), titleMatch.index + 4000);
+        const extendedPattern = /(il y a \d+ (?:jour|jours|semaine|semaines|mois|an|ans)|le \d{1,2}\s+\w+\.?\s+\d{4})/i;
+        const extendedMatch = extendedContext.match(extendedPattern);
+        if (extendedMatch && extendedMatch[1]) {
+          dateText = extendedMatch[1].trim();
+          console.log(`📅 Date trouvée (contexte étendu) pour "${title}": ${dateText}`);
+        }
+      }
+      
+      if (!dateText) {
+        console.log(`⚠️  Aucune date trouvée pour "${title}"`);
+        console.log(`🔍 Contexte (500 premiers caractères): ${context.substring(0, 500)}`);
+      }
       
       if (title && content && content.length > 20) {
         // Chercher le lien associé
@@ -49,13 +104,19 @@ function parseReviewsFromHTML(html) {
         if (dateText) {
           if (dateText.includes('il y a')) {
             finalDate = parseRelativeDate(dateText);
+            console.log(`📅 Date parsée (relative) pour "${title}": ${dateText} → ${finalDate}`);
           } else if (dateText.match(/le \d{1,2}\s+\w+\.?\s+\d{4}/)) {
             finalDate = parseFrenchDate(dateText);
+            console.log(`📅 Date parsée (française) pour "${title}": ${dateText} → ${finalDate}`);
+          }
+          
+          if (!finalDate) {
+            console.log(`⚠️  Impossible de parser la date "${dateText}" pour "${title}"`);
           }
         }
         
         // Ajouter la critique
-        reviews.push({
+        const review = {
           title,
           content: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
           date: finalDate || dateText || null,
@@ -63,7 +124,10 @@ function parseReviewsFromHTML(html) {
           updated_at: finalDate || null,
           url,
           rating
-        });
+        };
+        
+        console.log(`✅ Critique ajoutée: "${title}" - Date: ${review.created_at || review.date || 'N/A'}`);
+        reviews.push(review);
       }
     }
     

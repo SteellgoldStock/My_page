@@ -577,6 +577,17 @@ function updateUIWithSCData(data) {
 
       // Prioriser created_at ou updated_at (dates ISO) sur date (texte relatif)
       const dateToFormat = review.created_at || review.updated_at || review.date;
+      
+      // Debug: afficher les dates dans la console
+      if (dateToFormat) {
+        console.log(`📅 Formatage date pour "${review.title}":`, {
+          original: review.date,
+          created_at: review.created_at,
+          updated_at: review.updated_at,
+          using: dateToFormat
+        });
+      }
+      
       const formattedDate = dateToFormat ? formatReviewDate(dateToFormat) : '';
       const ratingStars = review.rating ? ` | ${review.rating}⭐` : '';
 
@@ -600,25 +611,52 @@ function updateUIWithSCData(data) {
 }
 
 function formatReviewDate(dateString) {
-  if (!dateString) return '';
-  
-  // Si c'est déjà une date ISO (format YYYY-MM-DD), utiliser getTimeAgo directement
-  if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
-    return getTimeAgo(dateString) || '';
+  if (!dateString) {
+    console.log('⚠️  formatReviewDate: dateString est vide');
+    return '';
   }
   
-  // Si c'est une date relative (texte), essayer de la parser
-  if (typeof dateString === 'string' && dateString.toLowerCase().includes('il y a')) {
-    const parsedDate = parseRelativeDateText(dateString);
-    if (parsedDate) {
-      return getTimeAgo(parsedDate) || '';
+  // Si c'est déjà une date ISO (format YYYY-MM-DD ou ISO complet), utiliser getTimeAgo directement
+  if (typeof dateString === 'string') {
+    // Vérifier si c'est une date ISO (format: YYYY-MM-DD ou YYYY-MM-DDTHH:mm:ss.sssZ)
+    if (/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
+      const result = getTimeAgo(dateString);
+      console.log(`✅ Date ISO formatée: ${dateString} → ${result}`);
+      return result || '';
     }
-    // Si on ne peut pas parser, retourner le texte original
-    return dateString;
+    
+    // Si c'est une date relative (texte), essayer de la parser
+    if (dateString.toLowerCase().includes('il y a')) {
+      const parsedDate = parseRelativeDateText(dateString);
+      if (parsedDate) {
+        const result = getTimeAgo(parsedDate);
+        console.log(`✅ Date relative parsée: ${dateString} → ${parsedDate} → ${result}`);
+        return result || '';
+      }
+      console.log(`⚠️  Impossible de parser la date relative: ${dateString}`);
+      // Si on ne peut pas parser, retourner le texte original
+      return dateString;
+    }
+    
+    // Si c'est une date française "le X nov. 2025"
+    if (dateString.match(/le \d{1,2}\s+\w+\.?\s+\d{4}/)) {
+      const parsedDate = parseFrenchDateText(dateString);
+      if (parsedDate) {
+        const result = getTimeAgo(parsedDate);
+        console.log(`✅ Date française parsée: ${dateString} → ${parsedDate} → ${result}`);
+        return result || '';
+      }
+    }
   }
   
   // Sinon, essayer getTimeAgo qui peut gérer certains formats
-  return getTimeAgo(dateString) || dateString || '';
+  const result = getTimeAgo(dateString);
+  if (result) {
+    return result;
+  }
+  
+  console.log(`⚠️  formatReviewDate: Impossible de formater la date: ${dateString}`);
+  return dateString || '';
 }
 
 // Fonction pour parser les dates relatives en dates absolues
@@ -673,6 +711,44 @@ function parseRelativeDateText(dateText) {
     const date = new Date(now);
     date.setDate(date.getDate() - 1);
     return date.toISOString();
+  }
+  
+  return null;
+}
+
+// Fonction pour parser les dates au format français "le 4 nov. 2025"
+function parseFrenchDateText(dateText) {
+  if (!dateText) return null;
+  
+  const months = {
+    'jan': 0, 'janv': 0, 'janvier': 0,
+    'fév': 1, 'févr': 1, 'février': 1,
+    'mar': 2, 'mars': 2,
+    'avr': 3, 'avril': 3,
+    'mai': 4,
+    'jun': 5, 'juin': 5,
+    'jul': 6, 'juil': 6, 'juillet': 6,
+    'aoû': 7, 'août': 7,
+    'sep': 8, 'sept': 8, 'septembre': 8,
+    'oct': 9, 'octobre': 9,
+    'nov': 10, 'novembre': 10,
+    'déc': 11, 'décembre': 11
+  };
+  
+  // Pattern: "le 4 nov. 2025" ou "le 4 novembre 2025"
+  const match = dateText.match(/le\s+(\d{1,2})\s+(\w+)\.?\s+(\d{4})/i);
+  if (match) {
+    const day = parseInt(match[1]);
+    const monthName = match[2].toLowerCase();
+    const year = parseInt(match[3]);
+    
+    const month = months[monthName];
+    if (month !== undefined) {
+      const date = new Date(year, month, day);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+    }
   }
   
   return null;
