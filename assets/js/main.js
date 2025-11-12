@@ -1,5 +1,5 @@
 const CONFIG = {
-  backendUrl: 'https://mypage-production-4e09.up.railway.app/',
+  backendUrl: 'https://mypage-production-4e09.up.railway.app',
   scUsername: 'KiMi_',
   githubUsername: 'UndKiMi',
   discordPollInterval: 2000,
