@@ -116,17 +116,19 @@ function parseReviewsFromHTML(html) {
         }
         
         // Ajouter la critique
+        // SOLUTION ALTERNATIVE: Toujours stocker le texte brut de la date
         const review = {
           title,
           content: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-          date: finalDate || dateText || null,
-          created_at: finalDate || null,
+          date: dateText || null, // Texte brut original
+          date_raw: dateText || null, // Texte brut pour parsing côté frontend
+          created_at: finalDate || null, // Date ISO si parsing réussi
           updated_at: finalDate || null,
           url,
           rating
         };
         
-        console.log(`✅ Critique ajoutée: "${title}" - Date: ${review.created_at || review.date || 'N/A'}`);
+        console.log(`✅ Critique ajoutée: "${title}" - Date brute: ${review.date_raw || 'N/A'} - Date ISO: ${review.created_at || 'N/A'}`);
         reviews.push(review);
       }
     }
@@ -219,7 +221,8 @@ function parseReviewsFromHTML(html) {
           reviews.push({
             title,
             content: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-            date: finalDate || dateText || null,
+            date: dateText || null,
+            date_raw: dateText || null,
             created_at: finalDate || null,
             updated_at: finalDate || null,
             url,
@@ -460,7 +463,8 @@ async function fetchSensCritiqueReviews(username) {
                 reviews.push({
                   title,
                   content: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-                  date: finalDate || dateText || null,
+                  date: dateText || null,
+                  date_raw: dateText || null,
                   created_at: finalDate || null,
                   updated_at: finalDate || null,
                   url,

@@ -575,17 +575,26 @@ function updateUIWithSCData(data) {
       reviewItem.target = '_blank';
       reviewItem.rel = 'noopener noreferrer';
 
-      // Prioriser created_at ou updated_at (dates ISO) sur date (texte relatif)
-      const dateToFormat = review.created_at || review.updated_at || review.date;
+      // SOLUTION ALTERNATIVE: Toujours parser le texte brut de la date
+      // Priorité: date_raw (texte brut) > created_at (ISO) > date (texte)
+      let dateToFormat = null;
       
-      // Debug: afficher les dates dans la console
-      if (dateToFormat) {
-        console.log(`📅 Formatage date pour "${review.title}":`, {
-          original: review.date,
-          created_at: review.created_at,
-          updated_at: review.updated_at,
-          using: dateToFormat
-        });
+      // Si on a un texte brut, le parser en date ISO
+      if (review.date_raw) {
+        const parsedFromRaw = parseDateFromText(review.date_raw);
+        if (parsedFromRaw) {
+          dateToFormat = parsedFromRaw;
+        } else {
+          // Si le parsing échoue, utiliser le texte brut directement
+          dateToFormat = review.date_raw;
+        }
+      } else if (review.created_at || review.updated_at) {
+        // Si on a déjà une date ISO, l'utiliser
+        dateToFormat = review.created_at || review.updated_at;
+      } else if (review.date) {
+        // Sinon, essayer de parser le champ date
+        const parsedFromDate = parseDateFromText(review.date);
+        dateToFormat = parsedFromDate || review.date;
       }
       
       const formattedDate = dateToFormat ? formatReviewDate(dateToFormat) : '';
@@ -612,51 +621,50 @@ function updateUIWithSCData(data) {
 
 function formatReviewDate(dateString) {
   if (!dateString) {
-    console.log('⚠️  formatReviewDate: dateString est vide');
     return '';
   }
   
-  // Si c'est déjà une date ISO (format YYYY-MM-DD ou ISO complet), utiliser getTimeAgo directement
-  if (typeof dateString === 'string') {
-    // Vérifier si c'est une date ISO (format: YYYY-MM-DD ou YYYY-MM-DDTHH:mm:ss.sssZ)
-    if (/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
-      const result = getTimeAgo(dateString);
-      console.log(`✅ Date ISO formatée: ${dateString} → ${result}`);
-      return result || '';
-    }
-    
-    // Si c'est une date relative (texte), essayer de la parser
-    if (dateString.toLowerCase().includes('il y a')) {
-      const parsedDate = parseRelativeDateText(dateString);
-      if (parsedDate) {
-        const result = getTimeAgo(parsedDate);
-        console.log(`✅ Date relative parsée: ${dateString} → ${parsedDate} → ${result}`);
-        return result || '';
-      }
-      console.log(`⚠️  Impossible de parser la date relative: ${dateString}`);
-      // Si on ne peut pas parser, retourner le texte original
-      return dateString;
-    }
-    
-    // Si c'est une date française "le X nov. 2025"
-    if (dateString.match(/le \d{1,2}\s+\w+\.?\s+\d{4}/)) {
-      const parsedDate = parseFrenchDateText(dateString);
-      if (parsedDate) {
-        const result = getTimeAgo(parsedDate);
-        console.log(`✅ Date française parsée: ${dateString} → ${parsedDate} → ${result}`);
-        return result || '';
-      }
+  // SOLUTION ALTERNATIVE: Toujours parser avec parseDateFromText d'abord
+  const parsedDate = parseDateFromText(dateString);
+  
+  if (parsedDate) {
+    // Si on a réussi à parser, utiliser getTimeAgo avec la date ISO
+    const result = getTimeAgo(parsedDate);
+    if (result) {
+      return result;
     }
   }
   
-  // Sinon, essayer getTimeAgo qui peut gérer certains formats
-  const result = getTimeAgo(dateString);
-  if (result) {
-    return result;
+  // Si le parsing a échoué ou getTimeAgo n'a pas fonctionné, essayer getTimeAgo directement
+  const directResult = getTimeAgo(dateString);
+  if (directResult) {
+    return directResult;
   }
   
-  console.log(`⚠️  formatReviewDate: Impossible de formater la date: ${dateString}`);
-  return dateString || '';
+  // En dernier recours, retourner le texte original
+  return dateString;
+}
+
+// SOLUTION ALTERNATIVE: Fonction unifiée pour parser n'importe quel format de date
+function parseDateFromText(dateText) {
+  if (!dateText || typeof dateText !== 'string') return null;
+  
+  const text = dateText.trim().toLowerCase();
+  
+  // Si c'est déjà une date ISO, la retourner telle quelle
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateText)) {
+    return dateText;
+  }
+  
+  // Parser les dates relatives "il y a X jours"
+  const relativeResult = parseRelativeDateText(dateText);
+  if (relativeResult) return relativeResult;
+  
+  // Parser les dates françaises "le X nov. 2025"
+  const frenchResult = parseFrenchDateText(dateText);
+  if (frenchResult) return frenchResult;
+  
+  return null;
 }
 
 // Fonction pour parser les dates relatives en dates absolues
